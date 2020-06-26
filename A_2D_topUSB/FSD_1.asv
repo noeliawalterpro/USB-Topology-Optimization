@@ -1,0 +1,123 @@
+tStart = tic;  % TIC, pair 2
+loop = 0;
+change = 1;
+n=1;
+nmetodo='FSD1__';
+% START ITERATION
+esofigure=figure('units','normalized','outerposition',[0 0 1 1])%set(esofigure, 'Visible', 'off')
+%% USER-DEFINED----
+ERR=0.04;
+% Sadm=max(esfv)*1.2;
+Sadm=30
+smax=40
+while change > volfrac/100 && loop < maxloop  && Sadm>smax
+    tic
+    loop=loop+1
+    for i=1:ne
+        Ee(i)=(Emin+xPhys(i)^penal*(Emin+E0));
+    end
+    %close all
+    femT % elementos finitos
+   smax= max(esfv)
+    if CUADRADOS==1
+        rr=2;
+    else
+        rr=1;
+    end
+    ERe=round(ne*ERR/rr); % elementos removibles
+    
+    ce=esfv;
+    
+    [M,IERe]=sort(ce/max(ce));  % I elementos con menor esfuerzo
+    xnew=xPhys;
+    a=1;
+    b=0;
+    i=0;
+    
+    for i=1:ne
+    xnew(i)=xPhys(i)*esfv(i)/Sadm;
+    if CUADRADOS==1
+                %% Elminar por cuadrados
+                if  rem(i,2)==0
+                    xnew(i)=xnew(i);
+                    xnew(i-1)=xnew(i);
+                    
+                    %  disp('El número es Par')
+                else
+                    xnew(i)=xnew(i);
+                    xnew(i+1)=xnew(i);
+                    
+                    %   disp('El número es Impar')
+                end
+            end
+    end
+%     
+%     while  a==1 && b<ERe
+%         i=i+1;
+%         k=IERe(i);
+%         
+%         if xPhys(k)>volmin && sum(k==efix)==0
+%             xnew(k)=xPhys(k)*esfv(k)/Sadm;
+%             %xnew(k)=volmin;
+%             b=b+1;
+%             if CUADRADOS==1
+%                 %% Elminar por cuadrados
+%                 if  rem(k,2)==0
+%                     xnew(k)=xnew(k);
+%                     xnew(k-1)=xnew(k);
+%                     
+%                     %  disp('El número es Par')
+%                 else
+%                     xnew(k)=xnew(k);
+%                     xnew(k+1)=xnew(k);
+%                     
+%                     %   disp('El número es Impar')
+%                 end
+%             end
+%         end
+%         %%
+%         %xnew(k)=0;
+%     end
+    if FILTRO==1
+        for i=1:ne
+            xnew(i) = sum((H(i,:).*xnew)/sum(H(i,:)));
+        end
+    end
+    
+   
+    change = sum(xPhys(:))/ne;
+    
+    if change < volfrac/100
+        disp('fraccion de volumen')
+        
+        [loop b sum(xPhys(:))/ne volfrac/100]
+        break
+        
+    else
+        xPhys=xnew;
+        
+    end
+    [loop b sum(xPhys(:))/ne volfrac/100]
+    %%
+    %figure('units','normalized','outerposition',[0 0 1 1])
+    
+    GRAF_F
+    
+    %%
+    
+    
+    
+    
+    toc
+end
+
+disp('fraccion de volumen')
+[sum(xPhys)/ne volfrac/100]
+%% Grafica de Estructura Final
+figure('units','normalized','outerposition',[0 0 1 1])
+xg=x; rho=1-xPhys; minrho=0.8; labels=0;
+daspect([1 1 1])
+GrafEstructura
+title(['Estructura Final'],'FontSize',10)
+%%
+tElapsed = toc(tStart)

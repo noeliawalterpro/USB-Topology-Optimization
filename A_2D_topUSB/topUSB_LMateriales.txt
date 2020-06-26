@@ -1,0 +1,18 @@
+%% PROPIEDADES DEL MATERIAL
+nu=0.3;E0=1;
+Emin=E0*1e-9;
+te=1; %espesor del elemento
+%% PROPIEDADES DEL MATERIAL OSEO
+HU=0;  % 1 ACTIVO 0 INACTIVO
+%% Hounfield a partir de DICOM
+HUmax=2565;
+HUmin=787;
+%% miguel cerrolaza
+dmax=1.9; %g/cm3  cortical
+dmin=0.14;%g/cm3  esponjoso 0.14 to 1.10
+%%
+nuB=0.342;EB=1;
+%EB=3.772*10e12;MPa  p.60  Carter y Hayes (1977)
+%EB=2915; Mpa ESPONJOSO p.57  Mow y Hayes (1977)
+%EB=2915; Mpa ESPONJOSO p.57  Mow y Hayes (1977)
+%%

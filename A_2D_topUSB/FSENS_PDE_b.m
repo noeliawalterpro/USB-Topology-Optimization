@@ -1,0 +1,3 @@
+ %% FILTERING/MODIFICATION OF SENSITIVITIES 
+
+Eb(:) = TF'*(LF'\(LF\(TF*Eb(:))));

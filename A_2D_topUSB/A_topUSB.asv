@@ -1,0 +1,397 @@
+clear all
+close all
+tStart = tic;
+tStartB = tic;
+CASO='';
+%% METODO       MMB     CANTd
+% % 0 FEM       0.1s
+% % 1 SIMP      57s     30s
+% % 2 HOM DIR   17s
+% % *3 ESO       7s      8s
+% % *4 BESO
+% % NO 5 HOM INV
+% % 6 SIMP + HOM DIR
+% % 7 ESO + HOM DIR
+%%%%%%%%%%%%%%%%%%%%%
+%% PROBLEMA
+% %  1  MBB
+% %  2  M CANTILEVER
+% %  3
+% %  4
+% %  5
+% %  6  Hueso+Andamio
+% %  7
+% %  8
+% %  9  Placa
+% % 10  Hueso solo]
+% % 11  2d plate bt Carter and Hayes/ Weinans
+% ****12  RESIZE - Hueso+Andamio
+% % 13  3 PUNTOS DE FLEXION
+% ****14  RESIZE - Placa
+
+%% % MBB_T
+PROBLEMA=1; METODO=2; N=1; nelx=N*24; nely=N*10;ft=2; lx=24;
+%% % CANTILEVER
+%PROBLEMA=2; METODO=2; nelx=40; nely=20;ft=2;
+%% % CANTILEVER2
+%PROBLEMA=3; METODO=1; nelx=50; nely=nelx/2;ft=2;
+%% % 3 PUNTOS DE FLEXION
+%PROBLEMA=13; METODO=0; lx=10; nelx=110; nely=11; fy=-1000; %(VIGA 10X1X1  elementos 110x11 ERROR=3.67% )
+%% % VIGA EN VOLADIZO
+%PROBLEMA=15; METODO=0; nelx=110; nely=11; fy=-1000;
+%% % PLACA
+%PROBLEMA=8; CASO='cuarto de placa'; METODO=0; nelx=500; nely=150;  fx=-1; ft=2;
+%PROBLEMA=14;CASO='cuarto de placa'; METODO=0;  ft=2; fx=-1000; Scale=1; nelx=400*Scale; nely=200*Scale;
+%NO--PROBLEMA=9; CASO='placa'; METODO=0; nelx=100; nely=30;  fx=1; ft=2;
+%%%%%%%%%%%%%%%%%%%%%%
+%% CASOS CLINICOS
+%% % FEMUR  (I_bone)
+%PROBLEMA=6; CASO='X-rays-of-leg-bones'; METODO=1;     ft=2;  nelx=45; nely=171;
+%PROBLEMA=12; CASO='X-rays-of-leg-bones'; METODO=2;     ft=2; Scale=0.5; nelx=160*Scale; nely=600*Scale;
+%PROBLEMA=10; CASO='X-rays-of-leg-bones'; METODO=0;    nelx=45; nely=171; ft=2;
+%% % EAR  (I_bone)
+%PROBLEMA=6; CASO='ear_'; METODO=2;    nelx=301; nely=167; ft=2;
+
+paso=lx/nelx;
+%paso=1;
+%% LOOP PARAMETERS
+volfrac=0.5; volmin=0; v=volfrac;
+F1=0.5; %factor de volumen de la primera fase
+penal=3;
+rmin=2;
+loop=0;
+maxloop=1000;
+%% MATERIAL PROPERTIES OSEO
+HU=0;  % 1 ACTIVO 0 INACTIVO
+BHU=1850 ; % cortical bone
+%Birur, NPraveen; Patrick, Sanjana; Gurushanth, Keerthi; Raghavan, AShubhasini; Gurudath, Shubha (2017). "Comparison of gray values of cone-beam computed tomography with hounsfield units of multislice computed tomography: An in vitro study". Indian Journal of Dental Research. 28 (1): 66. doi:10.4103/ijdr.IJDR_415_16. ISSN 0970-9290.
+% a1=1e-5; % pendiente
+% b2=0.0037; % constante
+a1=1;
+b2=0;
+EB=1;
+nuB=0.342;
+%EB=3.772*10e12;MPa  p.60  Carter y Hayes (1977)
+%EB=2915; Mpa ESPONJOSO p.57  Mow y Hayes (1977)
+%EB=2915; Mpa ESPONJOSO p.57  Mow y Hayes (1977)
+%% MATERIAL PROPERTIES ANDAMIO
+nu=0.3;
+E0=1;
+Emin=E0*1e-9;
+te=1; %espesor del elemento
+%% MATERIAL PROPERTIES OSEO
+HU=0;  % 1 ACTIVO 0 INACTIVO
+BHU=1850 ; % cortical bone
+%Birur, NPraveen; Patrick, Sanjana; Gurushanth, Keerthi; Raghavan, AShubhasini; Gurudath, Shubha (2017). "Comparison of gray values of cone-beam computed tomography with hounsfield units of multislice computed tomography: An in vitro study". Indian Journal of Dental Research. 28 (1): 66. doi:10.4103/ijdr.IJDR_415_16. ISSN 0970-9290.
+% a1=1e-5; % pendiente
+% b2=0.0037; % constante
+a1=1;
+b2=0;
+EB=E0;
+nuB=0.342;
+%EB=3.772*10e12;MPa  p.60  Carter y Hayes (1977)
+%% MODIFICABLE  % 1 ACTIVO 0 INACTIVO
+GRAF_ViewDesign=0; % view design CON PROBLEMAS
+displayflag=1;  %
+GRAF_D=0;       % 0 esfuerzos  1 densidades
+IMAGENES=0;     % EXPORTAR IMAGENES 1 ACTIVO 0 INACTIVO
+RESULTADOS=1;
+ACTPAS=0;       % activos y pasivos
+FIJOS=0;        % elementos fijos
+DEFORMADA=0;    % 1 Deformada 0 INDEFORMADA
+NODOS=0;
+edo_pdef=0;     % Estado plano de deformaciones 1 ACTIVO
+%% PREPARE FINITE ELEMENT ANALYSIS
+ne=(nely)*(nelx);
+nodos=(nely+1)*(nelx+1);
+gdl=nodos*2;
+%% % INICIALIZANDO
+U=zeros(gdl,1);
+F=zeros(gdl,1);
+Fi=zeros(gdl,1);
+fixeddofs=[];
+%% estado plano esfuerzos
+Di= 1/(1-nu^2)*[1 nu 0;nu 1 0;0 0 (1-nu)/2];
+%% estado plano de deformaciones
+% Di= 1/((1+nu)*(1-2*nu))*[1-nu     nu    0    ; v    1-nu    0 ;0   0   (1-nu)/2];
+if edo_pdef==1
+    nu=(nu/(1-nu));
+    nuB=(nuB/(1-nuB));
+    a=(1-nu)/(1+nu);
+    EB=EB*a;
+    Emin=Emin*a;
+    a=(1-nuB)/(1+nuB);
+    E0=E0*a;
+end
+eta=0;zeda=0;%factores del elemento
+A11 =  [12 3 -6 -3;3 12   3 0; -6 3 12 -3; -3 0  -3 12];
+A12 =  [-6 -3 0  3; -3 -6  -3 -6;   0 -3 -6 3; 3 -6 3   -6];
+B11 =  [-4 3 -2 9; 3 -4   -9 4; -2 -9 -4 -3; 9 4   -3   -4];
+B12 =  [ 2 -3 4  -9;-3 2   9 -2; 4 9 2  3; -9 -2  3    2];
+KE = te*(1-nu^2)/24*([A11 A12;A12' A11]+nu*[B11 B12;B12' B11]);
+KEB= te*(1-nuB^2)/24*([A11 A12;A12' A11]+nuB*[B11 B12;B12' B11]);
+nodenrs = reshape(1:nodos,1+nely,1+nelx);
+edofVec = reshape(2*nodenrs(1:end-1,1:end-1)+1, nelx*nely,1);
+edofMat =repmat(edofVec,1,8)+repmat([0 1 2*nely+[2 3 0 1] -2 -1],nelx*nely,1);
+%edofMat=[edofMat(:,7:8) edofMat(:,3:6) edofMat(:,1:2)];
+iK = reshape(kron(edofMat,ones(8,1))',64*nelx*  nely,1);
+jK = reshape(kron(edofMat,ones(1,8))',64*nelx*  nely,1);
+%% Grados de libertad en y   % Grados de libertad en x
+% (8)_____________(6)       % (7)_____________(5)
+%    |            |         %    |            |
+%    |            |         %    |            |
+%    |            |         %    |            |
+% (2)|____________|(4)      % (1)|____________|(3)
+%% NODOS
+jj=0;
+node=zeros(ne,4);
+xe=zeros(ne,4);
+ye=zeros(ne,4);
+xc=zeros(ne,1);
+yc=zeros(ne,1);
+for j=1:nelx
+    for i=1:nely
+        
+        jj=jj+1;
+        %
+        node(jj,1)=i+(j-1)*(nely+1);
+        node(jj,2)=j*(nely+1)+i;
+        node(jj,3)=j*(nely+1)+i+1;
+        node(jj,4)=i+(j-1)*(nely+1)+1;%
+    end
+end
+% edofMat=[2*node(:,1)-1 2*node(:,1)...
+%         2*node(:,2)-1 2*node(:,2)...
+%         2*node(:,3)-1 2*node(:,3)...
+%         2*node(:,4)-1 2*node(:,4) ];
+xi=0:nelx;
+yi=0:nely;
+[XI,YI]=meshgrid(xi,yi);
+XI=XI(:)*paso;
+YI=YI(:)*paso;
+xe=XI(node);
+ye=YI(node);
+
+for i=1:ne
+    xc(i,1)=mean(xe(i,:));
+    yc(i,1)=mean(ye(i,:));
+end
+xc=reshape(xc,nely,nelx);
+yc=reshape(yc,nely,nelx);
+
+ycl=flip(yc,1);
+xcl=flip(xc,1);
+xcl=xcl(:);
+ycl=ycl(:);
+%%
+%fixeddofs=zeros(ne,1);
+detJ(1:ne)=0;
+J11(1:ne)=0; J22(1:ne)=0;
+J21(1:ne)=0; J12(1:ne)=0;
+%% PREPARE FILTER
+iH = ones(nelx*nely*(2*(ceil(rmin)-1)+1)^2,1);
+jH = ones(size(iH));
+sH = zeros(size(iH));
+k = 0;
+for i1 = 1:nelx
+    for j1 = 1:nely
+        el = (i1-1)*nely+j1;
+        for i2 = max(i1-(ceil(rmin)-1),1):min(i1+( ceil(rmin)-1),nelx)
+            for j2 = max(j1-(ceil(rmin)-1),1):min(j1+( ceil(rmin)-1),nely)
+                e2 = (i2-1)*nely+j2;
+                k = k+1;
+                
+                iH(k) = el;
+                jH(k) = e2;
+                sH(k) = max(0,rmin-sqrt((i1-i2)^2+(j1-j2)^2));
+            end
+        end
+    end
+end
+
+H = sparse(iH,jH,sH);
+Hs = sum(H,2);
+
+
+%% INICIALIZACION DE DENSIDADES
+x= ones(nely,nelx);
+design=x;
+m1=x-1;
+m2=x-1;
+xPhys=x;
+%% factores geomtricos
+ae=0.25*(-xe(:,1)+xe(:,2)+xe(:,3)-xe(:,4));
+be=0.25*(-xe(:,1)-xe(:,2)+xe(:,3)+xe(:,4));
+ce=0.25*(xe(:,1)-xe(:,2)+xe(:,3)-xe(:,4));
+de=0.25*(xe(:,1)+xe(:,2)+xe(:,3)+xe(:,4));
+
+ee=0.25*(-ye(:,1)+ye(:,2)+ye(:,3)-ye(:,4));
+fe=0.25*(-ye(:,1)-ye(:,2)+ye(:,3)+ye(:,4));
+ge=0.25*(ye(:,1)-ye(:,2)+ye(:,3)-ye(:,4));
+he=0.25*(ye(:,1)+ye(:,2)+ye(:,3)+ye(:,4));
+
+J11=ae+ce*eta;
+J12=ee+ge*eta;
+J21=be+ce*zeda;
+J22=fe+ge*zeda;
+detJ=J11.*J22-J12.*J21;
+%% DEFINE LOADS AND SUPPORTS
+% PROBLEMA  M-MANUAL  I-IMAGEN
+if PROBLEMA==1;M_HALF_MBB ;end   % I_MBB_T
+if PROBLEMA==2;M_Cantilever;end
+if PROBLEMA==3;M_Cantilever2;end
+if PROBLEMA==4;I_L_Shape2;end
+if PROBLEMA==5;I_L_Shape;end
+if PROBLEMA==6;I_bone11;end
+if PROBLEMA==7;I_ear;end
+if PROBLEMA==8;I_placaR;end
+if PROBLEMA==9;I_placa;end
+if PROBLEMA==10;I_bone21;end
+if PROBLEMA==12;I_bone_R;end
+if PROBLEMA==13;M_3PointBending;end
+if PROBLEMA==14;I_placaR2;end
+if PROBLEMA==15;M_Vvoladizo;end
+%%
+alldofs = [1:2*(nely+1)*(nelx+1)];
+fixeddofs = unique(fixeddofs);
+fixeddofs=sort(fixeddofs);
+freedofs = setdiff(alldofs,fixeddofs);
+%% TIEMPO
+disp('Geometria listo')
+tElapsedB = toc(tStartB)
+tStartM= tic;
+F=Fi;
+%% DESIGN VIEW
+dview=design;
+[rowDV,colDV]=find(design>0);
+dview(union(1:min(rowDV),max(rowDV):nely),:)=[];
+dview(:,union(1:min(colDV),max(colDV):nelx))=[];
+% imagesc(1-dview)
+% daspect([1 1 1]);
+%% METODOS PUROS
+set(0,'DefaultFigureWindowStyle','normal')
+hh =figure('units','normalized','outerposition',[0 0 1 1],'visible','off');
+if METODO==0;
+    nmetodo='topUSB FEM+';
+    IMAGENES=0;
+    if HU==1
+        xPhys=design.*xPhys +m2;
+    else
+        xPhys=design.*xPhys +m1;
+    end
+    xini=xPhys;
+    
+    cant=0;
+    c=100;
+  
+  topUSB_fem
+    %topUSB_esf_def
+%femCnw
+end
+if METODO==1;
+    nmetodo='topUSB simp+';
+    if IMAGENES==1
+        nmetodo =strcat(nmetodo, input(nmetodo,'s'));
+    end
+    OT_2D_simp2_topUSB;
+end
+if METODO==2;
+    nmetodo='topUSB HOMab+';
+    if IMAGENES==1
+        nmetodo =strcat(nmetodo, input(nmetodo,'s'));
+    end
+    OT_2D_HOMab_topUSB;
+end
+if METODO==3;
+    nmetodo='topUSB ESO+';
+    if IMAGENES==1
+        nmetodo =strcat(nmetodo, input(nmetodo,'s'));
+    end
+    OT_2D_ESO_topUSB;
+end
+if METODO==4;
+    nmetodo='topUSB BESO2+';
+    if IMAGENES==1
+        nmetodo =strcat(nmetodo, input(nmetodo,'s'));
+    end
+    OT_2D_BESO2_topUSB;
+end
+
+%% METODOS COMBINADOS
+if METODO==6;
+    nmetodo='topUSB simp+HOMab';
+    if IMAGENES==1
+        nmetodo =strcat(nmetodo, input(nmetodo,'s'));
+    end
+    volfrac=v+(1-v)*F1;
+    OT_topUSB_simp;
+    volfrac=v;
+    OT_2D_topHOMab;
+end
+if METODO==7;
+    nmetodo='topUSB ESO+HOMab';
+    if IMAGENES==1
+        nmetodo =strcat(nmetodo, input(nmetodo,'s'));
+    end
+    ft=1;
+    volfrac=v+(1-v)*F1;OT_ESO_topUSB;
+    ft=2;
+    volfrac=v;
+    OT_2D_HOMab_topUSB;
+end
+disp('Metodo listo')
+%% TIEMPOS
+%tElapsedB
+
+tElapsedMetodo = toc(tStartM)
+
+tElapsed = toc(tStart)
+%%
+topUSB_Results
+if max(abs(U(:)))>0.01
+    umx=max(abs(U(:)))
+    disp('Grandes deformaciones')
+end
+disp('fin')
+LL=nelx/nely;
+WW=mean(xPhys(:))/nelx*nely;
+if PROBLEMA==13;
+    x=0:paso:paso*nelx;
+    E=E0;
+    P=abs(fy);
+    L=nelx*paso
+    h=nely*paso;
+    
+    
+    E=200e9;
+    P=1000;
+    h=1;
+    b=1;
+    I=b^3*h/12;
+    
+    L=10;
+    v=P/(48*E*I)*(4*x.^3-3*L^2*x-8*(x-L/2).^3)
+    desp=P*L^3/(48*E*I)
+    % uy(round(nely*nelx/2)-nely)
+    minu=min(U)
+    minuy=min(uy(:))
+    
+    error=(abs(desp)-abs(minu))/abs(desp)*100
+end
+
+if PROBLEMA==14;
+    aa=nely*paso/2;
+    tita=0;
+    T=fx*2;
+    r=aa:paso:paso*nelx;
+    sigmax=T-T*aa^2./r.^2*(3/2*cos(2*tita))+T*(3/2*aa^4./r.^4)*cos(4*tita)
+    esfx(nely,:)
+    sigmay=-T*aa^2./r.^2*(1/2*cos(2*tita)-cos(4*tita))-T*3/2*aa^4./r.^4*cos(4*tita)
+    esfy(nely,:)
+    taoxy=-T*aa^2./r.^2*(1/2*sin(2*tita)+sin(4*tita))+T*3/4*aa^4./r.^4*sin(4*tita)
+    txy(nely,:)
+    
+end
+
+ al=ai(:);
+ bl=bi(:);

@@ -1,0 +1,31 @@
+%%%%%%%%%%%%%%%%%%%%
+%% CONFIGURACION
+topUSB_config
+eval('topUSB_config_Mat')
+%% PROBLEMA
+nproblema='C3_F1_0_minImp_wieding_etal_R';
+%nK='K_2D_cortical_esponjoso_implante';
+%% Geometria
+Scale=2;
+A_G_F_wieding
+
+%%%%%%%%%%%%%%%%%%%%
+%%  %% METODO %%
+METODO=300; %300 puro 400 combinado
+F1=0;
+Met=0;
+Metodo1='M6_0_OT_2D_HOM_m2_topUSB_Mat'; 
+%%%%%%%%%%%%%%%%%%%%%
+%% LOOP PARAMETERS
+%%%%%%%%%%%%%%%%%%%%
+volfrac=0.5; volmin=0; v=volfrac;
+rmin=3/paso;
+penal=3;tolx=0.001;
+ft=2;
+maxloop=1000;
+nmicro='micro2';
+
+%% RESTRICCIONES
+PorObj=0.6;        % R1
+A_R_M2
+if METODO==100; ConvergenciaFEM, else  A_2D_topUSB,end
